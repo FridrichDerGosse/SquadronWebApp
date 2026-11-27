@@ -24,7 +24,7 @@ Color statusColors(int? code) {
     3 => Colors.grey,
     4 => Colors.green,
     5 => Colors.grey,
-    6 => Colors.grey,
+    6 => Colors.red,
     7 => Colors.grey,
     8 => Colors.grey,
     9 => Colors.grey,

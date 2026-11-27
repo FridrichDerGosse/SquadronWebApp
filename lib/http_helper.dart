@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 import 'package:squadron_web_app/misc/auth_session.dart';
 
@@ -7,12 +9,14 @@ import 'package:squadron_web_app/misc/auth_session.dart';
 const String _baseUri = "https://api.squadron.party";
 
 
-Future fetchStatus() async {
+Future fetchStatus() async
+{
   final response = await http.get(
     Uri.parse('$_baseUri/'),
   );
 
-  if (response.statusCode != 200) {
+  if (response.statusCode != 200)
+  {
     throw Exception('Request failed with status ${response.statusCode}');
   }
 
@@ -20,7 +24,8 @@ Future fetchStatus() async {
 }
 
 
-Future<bool> loginUser(String username, String password) async {
+Future<bool> loginUser(String username, String password) async
+{
   final response = await http.post(
     Uri.parse('$_baseUri/login'),
     body: {
@@ -29,7 +34,8 @@ Future<bool> loginUser(String username, String password) async {
     },
   );
 
-  if (response.statusCode != 200) {
+  if (response.statusCode != 200)
+  {
     return false;
   }
 
@@ -53,7 +59,7 @@ Future getStatus() async
   };
 
   final response = await http.get(
-    Uri.parse('$_baseUri/status/all'),
+    Uri.parse('$_baseUri/user/all'),
     headers: headers,
   );
 
@@ -64,3 +70,56 @@ Future getStatus() async
   final decoded = jsonDecode(response.body) as List<dynamic>;
   return decoded.cast();
 }
+
+
+Stream<Map<String, dynamic>> _streamSseEvents(
+  Uri uri, {
+  String? bearerToken,
+}) async*
+{
+  final client = http.Client();
+  debugPrint("trying to start SSE");
+
+  try {
+    final request = http.Request('GET', uri);
+    if (bearerToken != null && bearerToken.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $bearerToken';
+    }
+
+    final response = await client.send(request);
+    if (response.statusCode != 200) {
+      throw Exception('SSE connection failed (${response.statusCode})');
+    }
+
+    debugPrint("starting SSE");
+
+    final lines = response.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+
+    await for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      debugPrint("event line: $trimmed");
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map) {
+        final eventMap = Map<String, dynamic>.from(decoded);
+        debugPrint("yield: ${eventMap['event']}");
+        yield eventMap;
+      }
+    }
+  } finally {
+    client.close();
+  }
+}
+
+
+Stream<Map<String, dynamic>> getEventStream()
+{
+  return _streamSseEvents(
+    Uri.parse('$_baseUri/events'),
+    bearerToken: AuthSession.token
+  );
+}
+
